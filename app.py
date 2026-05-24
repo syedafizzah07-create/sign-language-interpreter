@@ -5,10 +5,6 @@ Web interface powered by Streamlit
 """
 
 import streamlit as st
-import cv2
-import numpy as np
-import sqlite3
-import pickle
 import os
 
 st.set_page_config(
@@ -21,10 +17,25 @@ st.title("🤟 Sign Language Interpreter using Deep Learning")
 st.markdown("**By Syeda Fizzah Batool** | MIT License")
 st.markdown("---")
 
+# ── Optional heavy deps (not available on Streamlit Cloud — model not in repo) ──
+try:
+    import cv2
+    import numpy as np
+    import pickle
+    import sqlite3
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+
+try:
+    from tensorflow.keras.models import load_model as _keras_load
+    TF_AVAILABLE = True
+except ImportError:
+    TF_AVAILABLE = False
+
 MODEL_PATH = os.path.join("Code", "cnn_model_keras2.h5")
 HIST_PATH  = os.path.join("Code", "hist")
 DB_PATH    = os.path.join("Code", "gesture_db.db")
-
 model_ready = os.path.exists(MODEL_PATH) and os.path.exists(HIST_PATH)
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -36,50 +47,80 @@ with st.sidebar:
         "in real time."
     )
     st.markdown("---")
-    st.header("How to use")
+    st.header("How it works")
     st.markdown(
-        "1. Allow camera access when prompted.\n"
-        "2. Place your hand inside the **green box** region.\n"
-        "3. Click **Capture** — the model predicts your gesture.\n"
-        "4. Predictions with >70 % confidence are accepted."
+        "1. The webcam feed is segmented using HSV back-projection.\n"
+        "2. Hand contour is extracted from a 300×300 ROI.\n"
+        "3. The contour image is resized to 50×50 and passed to the CNN.\n"
+        "4. Predictions with >70 % confidence are accepted.\n"
+        "5. Confirmed gestures are spoken aloud via text-to-speech."
     )
     st.markdown("---")
     st.header("Tech Stack")
     st.markdown("- Python 3\n- Keras / TensorFlow\n- OpenCV\n- SQLite\n- Streamlit")
 
-# ── Demo GIFs tab / Live tab ──────────────────────────────────────────────────
+# ── Tabs ─────────────────────────────────────────────────────────────────────
 tab_demo, tab_live, tab_setup = st.tabs(["📽️ Demo", "📷 Live Recognition", "⚙️ Setup Guide"])
 
+# ── Demo tab ─────────────────────────────────────────────────────────────────
 with tab_demo:
     st.subheader("Project Demonstrations")
-    col1, col2 = st.columns(2)
+    st.markdown(
+        "The model recognises 44 ASL characters in real time from a webcam feed. "
+        "Below are recorded demonstrations."
+    )
     gif_dir = "img"
-    gifs = [f for f in ["demo.gif","demo2.gif","demo3.gif","demo4.gif","demo5.gif"]
+    gifs = [f for f in ["demo.gif", "demo2.gif", "demo3.gif", "demo4.gif", "demo5.gif"]
             if os.path.exists(os.path.join(gif_dir, f))]
-    for i, gif in enumerate(gifs):
-        (col1 if i % 2 == 0 else col2).image(
-            os.path.join(gif_dir, gif), use_container_width=True
-        )
-    if not gifs:
-        st.info("Demo GIFs not found. Make sure the `img/` folder is present.")
+    if gifs:
+        col1, col2 = st.columns(2)
+        for i, gif in enumerate(gifs):
+            (col1 if i % 2 == 0 else col2).image(
+                os.path.join(gif_dir, gif), use_container_width=True
+            )
+    else:
+        st.info("Demo GIFs not found — make sure the `img/` folder is present.")
 
+    st.markdown("---")
+    st.subheader("Screenshots")
+    shots = [f for f in ["Capture1.PNG", "Capture.PNG"]
+             if os.path.exists(os.path.join(gif_dir, f))]
+    if shots:
+        cols = st.columns(len(shots))
+        for col, shot in zip(cols, shots):
+            col.image(os.path.join(gif_dir, shot), use_container_width=True)
+
+# ── Live Recognition tab ──────────────────────────────────────────────────────
 with tab_live:
-    if not model_ready:
-        st.warning(
-            "**Model not found.** "
-            "The CNN model must be trained before live recognition works. "
-            "See the **Setup Guide** tab for instructions."
-        )
+    if not CV2_AVAILABLE or not TF_AVAILABLE:
         st.info(
-            "Once you have trained the model (`Code/cnn_model_keras2.h5`) "
-            "and the hand histogram (`Code/hist`), restart this app and live "
-            "recognition will activate automatically."
+            "### Live recognition is not available on the cloud deployment\n\n"
+            "This tab requires **OpenCV** and **TensorFlow**, which are large "
+            "packages that cannot be installed on Streamlit Cloud's free tier "
+            "for Python 3.14.\n\n"
+            "**To run live recognition locally:**\n"
+            "```bash\n"
+            "pip install tensorflow>=2.13,<2.16 opencv-python numpy scikit-learn h5py pyttsx3\n"
+            "python Code/final.py\n"
+            "```\n\n"
+            "Or for the Streamlit version locally:\n"
+            "```bash\n"
+            "pip install streamlit tensorflow>=2.13,<2.16 opencv-python numpy\n"
+            "streamlit run app.py\n"
+            "```"
+        )
+    elif not model_ready:
+        st.warning(
+            "**Model not trained yet.**  \n"
+            "Follow the **Setup Guide** tab to train the CNN and generate "
+            "`Code/cnn_model_keras2.h5`, then re-run the app."
         )
     else:
+        # ── Full live recognition (runs locally after training) ──────────────
         @st.cache_resource(show_spinner="Loading model…")
         def load_resources():
-            from tensorflow.keras.models import load_model as _load
-            m = _load(MODEL_PATH)
+            import pickle
+            m = _keras_load(MODEL_PATH)
             with open(HIST_PATH, "rb") as f:
                 h = pickle.load(f)
             return m, h
@@ -89,6 +130,7 @@ with tab_live:
 
         def get_pred_text(pred_class):
             try:
+                import sqlite3
                 conn = sqlite3.connect(DB_PATH)
                 row = conn.execute(
                     "SELECT g_name FROM gesture WHERE g_id=?", (pred_class,)
@@ -113,8 +155,7 @@ with tab_live:
             w = min(w, w_img - x); h = min(h, h_img - y)
             roi = thresh[y:y+h, x:x+w]
             contours = cv2.findContours(roi.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)[0]
-            pred_text = ""
-            confidence = 0.0
+            pred_text, confidence = "", 0.0
             if contours:
                 contour = max(contours, key=cv2.contourArea)
                 if cv2.contourArea(contour) > 10000:
@@ -137,14 +178,15 @@ with tab_live:
             cv2.rectangle(annotated, (300, 100), (600, 400), (0, 255, 0), 2)
             return pred_text, confidence, roi, annotated
 
-        camera_image = st.camera_input("📸 Capture a gesture (place hand in the green box area)")
+        st.markdown("Place your hand inside the **green box** region before capturing.")
+        camera_image = st.camera_input("📸 Capture a gesture")
         if camera_image:
             nparr = np.frombuffer(camera_image.getvalue(), np.uint8)
             bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             pred_text, confidence, thresh_roi, annotated = process_frame(bgr)
             c1, c2, c3 = st.columns(3)
             c1.image(cv2.cvtColor(annotated, cv2.COLOR_BGR2RGB),
-                     caption="Captured frame (green box = hand region)", use_container_width=True)
+                     caption="Captured frame", use_container_width=True)
             c2.image(thresh_roi, caption="Hand threshold (ROI)", use_container_width=True)
             with c3:
                 st.markdown("### Result")
@@ -152,65 +194,79 @@ with tab_live:
                     st.success(f"**Gesture:** {pred_text}")
                     st.metric("Confidence", f"{confidence:.1f} %")
                 else:
-                    st.warning("No gesture detected (confidence < 70 % or no hand found).")
-                    if confidence > 0:
-                        st.metric("Best confidence", f"{confidence:.1f} %")
+                    st.warning("No gesture detected (confidence < 70 %).")
 
+# ── Setup Guide tab ───────────────────────────────────────────────────────────
 with tab_setup:
-    st.subheader("Training the Model (One-time Setup)")
+    st.subheader("Training the Model — One-time Local Setup")
     st.markdown(
-        "The model is **not included** in the repository because it must be "
-        "trained on your own hand gestures for best accuracy. Follow these steps:"
+        "The trained model is **not bundled** in this repository because it must "
+        "be trained on your own hand under your own lighting conditions for best accuracy."
     )
     st.markdown("""
-**Step 1 — Calibrate hand detection**
+**Step 1 — Install dependencies**
+```bash
+pip install tensorflow>=2.13,<2.16 opencv-python numpy scikit-learn h5py pyttsx3
 ```
+
+---
+
+**Step 2 — Calibrate hand detection**
+```bash
 cd Code
 python set_hand_histogram.py
 ```
-Place your hand in the on-screen grid and press **`c`** to capture, then **`s`** to save.
+Place your hand in the on-screen grid → press **`c`** to capture → press **`s`** to save.
 
 ---
 
-**Step 2 — Capture gesture samples**
-```
+**Step 3 — Capture gesture samples**
+```bash
 python create_gestures.py
 ```
-Enter a gesture ID (0, 1, 2 …) and a label (e.g. `Hello`). Press **`c`** to start capturing.
-The script collects 1200 images per gesture.
+Enter a gesture ID (0, 1, 2 …) and a label (e.g. `Hello`).
+Press **`c`** to start — collects 1 200 images per gesture automatically.
 
 ---
 
-**Step 3 — Augment the dataset**
-```
+**Step 4 — Augment the dataset**
+```bash
 python Rotate_images.py
 ```
-Flips every image to double the dataset.
+Flips every image horizontally, doubling the dataset size.
 
 ---
 
-**Step 4 — Prepare train/val/test splits**
-```
+**Step 5 — Prepare train / val / test splits**
+```bash
 python load_images.py
 ```
 
 ---
 
-**Step 5 — Train the CNN**
-```
+**Step 6 — Train the CNN**
+```bash
 python cnn_model_train.py
 ```
-This saves `cnn_model_keras2.h5` when validation accuracy peaks.
+Trains for 15 epochs and saves `cnn_model_keras2.h5` at peak validation accuracy.
 
 ---
 
-**Step 6 — Run live recognition (desktop)**
-```
+**Step 7 — Run live recognition**
+```bash
+# Desktop window (full app with text-to-speech):
 python final.py
+
+# OR browser-based Streamlit version:
+streamlit run app.py
 ```
-Or restart this Streamlit app for browser-based recognition.
     """)
     st.info(
-        "💡 Tip: For the best results, capture gestures under consistent lighting "
-        "and re-run `set_hand_histogram.py` if you change your environment."
+        "💡 **Tip:** Capture gestures under consistent lighting and re-run "
+        "`set_hand_histogram.py` whenever your lighting environment changes."
+    )
+    st.markdown("---")
+    st.markdown(
+        "**Project by Syeda Fizzah Batool** — MIT License  \n"
+        "Real-time ASL interpretation using CNN + OpenCV + Streamlit"
     )

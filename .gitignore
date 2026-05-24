@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Trained model (large binary — train locally)
+Code/cnn_model_keras2.h5
+
+# Dataset pickles (large — generated locally)
+Code/train_images
+Code/train_labels
+Code/test_images
+Code/test_labels
+Code/val_images
+Code/val_labels
+
+# Gesture image dataset (large — captured locally)
+Code/gestures/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/secrets.toml

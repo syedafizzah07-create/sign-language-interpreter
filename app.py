@@ -78,7 +78,7 @@ with tab_live:
     else:
         @st.cache_resource(show_spinner="Loading model…")
         def load_resources():
-            from keras.models import load_model as _load
+            from tensorflow.keras.models import load_model as _load
             m = _load(MODEL_PATH)
             with open(HIST_PATH, "rb") as f:
                 h = pickle.load(f)

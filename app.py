@@ -64,31 +64,42 @@ tab_demo, tab_live, tab_setup = st.tabs(["📽️ Demo", "📷 Live Recognition"
 
 # ── Demo tab ─────────────────────────────────────────────────────────────────
 with tab_demo:
-    st.subheader("Project Demonstrations")
-    st.markdown(
-        "The model recognises 44 ASL characters in real time from a webcam feed. "
-        "Below are recorded demonstrations."
-    )
-    gif_dir = "img"
-    gifs = [f for f in ["demo.gif", "demo2.gif", "demo3.gif", "demo4.gif", "demo5.gif"]
-            if os.path.exists(os.path.join(gif_dir, f))]
-    if gifs:
-        col1, col2 = st.columns(2)
-        for i, gif in enumerate(gifs):
-            (col1 if i % 2 == 0 else col2).image(
-                os.path.join(gif_dir, gif), use_container_width=True
-            )
-    else:
-        st.info("Demo GIFs not found — make sure the `img/` folder is present.")
+    img_dir = "img"
+
+    # Hero banner — full width
+    hero = os.path.join(img_dir, "hero.png")
+    if os.path.exists(hero):
+        st.image(hero, use_container_width=True)
 
     st.markdown("---")
-    st.subheader("Screenshots")
-    shots = [f for f in ["Capture1.PNG", "Capture.PNG"]
-             if os.path.exists(os.path.join(gif_dir, f))]
-    if shots:
-        cols = st.columns(len(shots))
-        for col, shot in zip(cols, shots):
-            col.image(os.path.join(gif_dir, shot), use_container_width=True)
+
+    # Pipeline + Features side by side
+    col1, col2 = st.columns(2)
+    pipeline = os.path.join(img_dir, "pipeline.png")
+    features = os.path.join(img_dir, "features.png")
+    if os.path.exists(pipeline):
+        col1.image(pipeline, caption="How It Works", use_container_width=True)
+    if os.path.exists(features):
+        col2.image(features, caption="Key Features", use_container_width=True)
+
+    st.markdown("---")
+
+    # Architecture + Tech Stack side by side
+    col3, col4 = st.columns(2)
+    arch = os.path.join(img_dir, "architecture.png")
+    tech = os.path.join(img_dir, "tech_stack.png")
+    if os.path.exists(arch):
+        col3.image(arch, caption="CNN Architecture", use_container_width=True)
+    if os.path.exists(tech):
+        col4.image(tech, caption="Technologies Used", use_container_width=True)
+
+    st.markdown("---")
+    st.info(
+        "🎬 **Want to see a live demo?**  "
+        "Run `python Code/final.py` locally after training the model, "
+        "record your screen with [ScreenToGif](https://www.screentogif.com/), "
+        "and replace the images in `img/` with your own recordings."
+    )
 
 # ── Live Recognition tab ──────────────────────────────────────────────────────
 with tab_live:
